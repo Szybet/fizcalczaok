@@ -1,7 +1,7 @@
 use std::{i32, process, str::FromStr};
 
 use log::{debug, error};
-use rust_decimal::{dec, Decimal};
+use rust_decimal::{dec, Decimal, MathematicalOps};
 
 mod helpers;
 
@@ -216,6 +216,16 @@ fn main() {
     debug!("Starting!");
 }
 
+pub fn potegowanie(licz: Decimal, do_potegi: Decimal) -> Decimal {
+    let mut licz_tmp = licz;
+    licz_tmp = licz_tmp.powd(do_potegi);
+
+    licz_tmp = licz_tmp.round_sf(ile_cyfr_znaczacych(licz) as u32).unwrap();
+    licz_tmp
+}
+
+// Tests
+
 use std::sync::Once;
 
 static INIT: Once = Once::new();
@@ -349,3 +359,30 @@ fn oz9() {
     assert_eq!(o3.to_string(), dec!(1.92).to_string());
 }
 
+#[test]
+fn oz10() {
+    test_setup();
+
+    assert_eq!(potegowanie(dec!(10.02), dec!(2)).to_string(), dec!(100.4).to_string());
+}
+
+#[test]
+fn oz11() {
+    test_setup();
+
+    assert_eq!(potegowanie(dec!(10.02), dec!(0.5)).to_string(), dec!(3.165).to_string());
+}
+
+#[test]
+fn oz12() {
+    test_setup();
+
+    assert_eq!(potegowanie(dec!(0.947), dec!(3)).to_string(), dec!(0.849).to_string());
+}
+
+#[test]
+fn oz13() {
+    test_setup();
+
+    assert_eq!(potegowanie(dec!(0.947), dec!(0.333333)).to_string(), dec!(0.982).to_string());
+}
