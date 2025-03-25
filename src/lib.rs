@@ -209,13 +209,6 @@ pub fn zaokrąglij(obliczona_licz: liczba, dzial: dzialanie) -> liczba {
     process::exit(1);
 }
 
-fn main() {
-    env_logger::init_from_env(
-        env_logger::Env::default().filter_or(env_logger::DEFAULT_FILTER_ENV, "debug"),
-    );
-    debug!("Starting!");
-}
-
 pub fn potegowanie(licz: Decimal, do_potegi: Decimal) -> Decimal {
     let mut licz_tmp = licz;
     licz_tmp = licz_tmp.powd(do_potegi);
