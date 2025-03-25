@@ -5,12 +5,12 @@ use rust_decimal::{dec, Decimal};
 
 mod helpers;
 
-#[derive(PartialEq)]
-#[derive(Debug)]
-#[derive(Copy, Clone)]
+#[derive(PartialEq, Debug, Copy, Clone)]
 enum oper {
     plus,
     minus,
+    razy,
+    dzielenie,
 }
 
 impl ToString for oper {
@@ -18,13 +18,20 @@ impl ToString for oper {
         match self {
             oper::plus => "+".to_string(),
             oper::minus => "-".to_string(),
+            oper::razy => "*".to_string(),
+            oper::dzielenie => "/".to_string(),
         }
     }
 }
 
 impl oper {
     pub fn return_list() -> Vec<String> {
-        vec![oper::plus.to_string(), oper::minus.to_string()]
+        vec![
+            oper::plus.to_string(),
+            oper::minus.to_string(),
+            oper::razy.to_string(),
+            oper::dzielenie.to_string(),
+        ]
     }
 
     pub fn from_str(str: &str) -> oper {
@@ -34,16 +41,32 @@ impl oper {
         if str == "-" {
             return oper::minus;
         }
+        if str == "*" {
+            return oper::razy;
+        }
+        if str == "/" {
+            return oper::dzielenie;
+        }
         error!("Unknown operation");
         process::exit(1);
     }
 }
 
-#[derive(PartialEq)]
-#[derive(Debug)]
-#[derive(Clone)]
+#[derive(PartialEq, Debug, Clone)]
+struct liczba {
+    liczba: Decimal,
+    dokladna: bool,
+}
+
+impl liczba {
+    pub fn new(licz: Decimal, dokl: bool) -> liczba {
+        liczba {liczba: licz, dokladna: dokl}
+    }
+}
+
+#[derive(PartialEq, Debug, Clone)]
 struct dzialanie {
-    liczby: Vec<Decimal>,
+    liczby: Vec<liczba>,
     operacje: Vec<oper>,
 }
 
@@ -60,7 +83,12 @@ pub fn stworz_dzial(str: &str) -> dzialanie {
     debug!("operacje wyszly: {:?}", operacje);
 
     for liczba in liczby {
-        dzial.liczby.push(Decimal::from_str(&liczba).unwrap());
+        let dec = Decimal::from_str(&liczba.replace("d", "")).unwrap();
+        if liczba.contains("d") {
+            dzial.liczby.push(liczba::new(dec, true));
+        } else {
+            dzial.liczby.push(liczba::new(dec, false));
+        }
     }
 
     for operacja in operacje {
@@ -74,8 +102,11 @@ pub fn stworz_dzial(str: &str) -> dzialanie {
 pub fn najmniej_dokladna_liczba(dzial: dzialanie) -> i32 {
     let mut smallest = i32::MAX;
     for liczba in dzial.liczby {
+        if liczba.dokladna {
+            continue;
+        }
         let mut after_dec: i32 = 0;
-        let decimal_str = liczba.to_string();
+        let decimal_str = liczba.liczba.to_string();
         if let Some(dot_index) = decimal_str.find('.') {
             after_dec = (decimal_str.len() - dot_index - 1) as i32;
         }
@@ -86,32 +117,96 @@ pub fn najmniej_dokladna_liczba(dzial: dzialanie) -> i32 {
     smallest
 }
 
+pub fn ile_cyfr_znaczacych(dec: Decimal) -> usize {
+    let mut str = dec.to_string();
+    str = str.replace(".", "");
+    let mut vec = str.chars().collect::<Vec<_>>();
+    while vec[0] == '0' {
+        vec.remove(0);
+    }
+    vec.iter().count() as usize
+}
+
 pub fn oblicz(dzial: dzialanie) -> Decimal {
     let mut dzial_mut = dzial.clone();
-    let mut fin: Decimal = dzial_mut.liczby.remove(0);
+    let mut fin = dzial_mut.liczby.remove(0);
     while dzial_mut.liczby.len() > 0 {
+        let fin_saved = fin.clone();
         let operacja = dzial_mut.operacje.remove(0);
         let to_dec = dzial_mut.liczby.remove(0);
         match operacja {
             oper::plus => {
-                fin = fin + to_dec;
-            },
+                fin.liczba = fin.liczba + to_dec.liczba;
+            }
             oper::minus => {
-                fin = fin - to_dec;
-            },
+                fin.liczba = fin.liczba - to_dec.liczba;
+            }
+            oper::razy => {
+                fin.liczba = fin.liczba * to_dec.liczba;
+            }
+            oper::dzielenie => {
+                fin.liczba = fin.liczba / to_dec.liczba;
+            }
+        }
+        if dzial.operacje.contains(&oper::razy) || dzial.operacje.contains(&oper::dzielenie) {
+            let tmp_dzial = dzialanie {
+                liczby: vec![fin_saved, to_dec] ,
+                operacje: vec![operacja],
+            };
+            fin = zaokrąglij(fin.clone(), tmp_dzial);    
         }
     }
-    fin
+
+    if dzial.operacje.contains(&oper::plus) || dzial.operacje.contains(&oper::minus) {
+        debug!("Minus lub plus, dodatkowe zaokraglenie w obliczeniach");
+        fin = zaokrąglij(fin.clone(), dzial);
+    }
+
+    fin.liczba
 }
 
-pub fn zaokrąglij(obliczona_licz: Decimal, dzial: dzialanie) -> Decimal {
+pub fn zaokrąglij(obliczona_licz: liczba, dzial: dzialanie) -> liczba {
     let mut obliczona_licz_mut = obliczona_licz.clone();
-    let n = najmniej_dokladna_liczba(dzial.clone()) as u32;
-    debug!("Najmniej dokladna liczba dla {:?} wynosi: {:?}", dzial, n);
-    obliczona_licz_mut.rescale(n);
+    if (dzial.operacje.contains(&oper::plus) || dzial.operacje.contains(&oper::minus))
+        && (dzial.operacje.contains(&oper::razy) || dzial.operacje.contains(&oper::dzielenie))
+    {
+        error!("Nie mieszaj operacji!");
+        process::exit(1);
+    }
 
-    debug!("Zaokrąglij zwraca: {}", obliczona_licz_mut);
-    obliczona_licz_mut
+    if dzial.operacje.contains(&oper::plus) || dzial.operacje.contains(&oper::minus) {
+        let n = najmniej_dokladna_liczba(dzial.clone()) as u32;
+        debug!("Operacja dodawania lub odejmowania...");
+        debug!("Najmniej dokladna liczba dla {:?} wynosi: {:?}", dzial, n);
+        obliczona_licz_mut.liczba.rescale(n);
+
+        debug!("Zaokrąglij zwraca: {:?}", obliczona_licz_mut);
+        return obliczona_licz_mut;
+    }
+
+    if dzial.operacje.contains(&oper::razy) || dzial.operacje.contains(&oper::dzielenie) {
+        let mut n = usize::MAX;
+        for i in dzial.liczby.clone() {
+            if i.dokladna {
+                continue;
+            }
+            let x = ile_cyfr_znaczacych(i.liczba);
+            if x < n {
+                n = x;
+            }
+        }
+        debug!("Operacja mnozenia lub dzielenia...");
+        debug!("Możliwa ilość znaczących liczb dla {:?} wynosi: {:?}", dzial, n);
+
+        // Tu uciac do liczb znaczacych
+        obliczona_licz_mut.liczba = obliczona_licz_mut.liczba.round_sf(n as u32).unwrap();
+
+        debug!("Zaokrąglij zwraca: {:?}", obliczona_licz_mut);
+        return obliczona_licz_mut;
+    }
+
+    error!("Nie udało sie wykryć operacji!");
+    process::exit(1);
 }
 
 fn main() {
@@ -138,82 +233,119 @@ fn small_tworzenie_dzialania() {
     test_setup();
 
     let dzial = dzialanie {
-        liczby: vec![dec!(0.232), dec!(5.538), dec!(43.2)],
+        liczby: vec![liczba::new(dec!(0.232), false), liczba::new(dec!(5.538), false), liczba::new(dec!(43.2), false)],
         operacje: vec![oper::plus, oper::plus],
     };
     assert_eq!(stworz_dzial("0,232+5,538+43,2"), dzial)
 }
 
 #[test]
-fn small_obliczanie_dodawanie() {
-    test_setup();
-
-    assert_eq!(oblicz(stworz_dzial("0,232+5,538+43,2")), dec!(48.970));
-}
-
-#[test]
-fn small_obliczanie_odejmowanie() {
-    test_setup();
-
-    assert_eq!(oblicz(stworz_dzial("0,00335+10,689-10")), dec!(0.69235));
-}
-
-#[test]
 fn small_najmniej_dokladna_liczba_1() {
     test_setup();
 
-    assert_eq!(najmniej_dokladna_liczba(stworz_dzial("0,232+5,538+43,2")), 1);
+    assert_eq!(
+        najmniej_dokladna_liczba(stworz_dzial("0,232+5,538+43,2")),
+        1
+    );
 }
 
 #[test]
 fn small_najmniej_dokladna_liczba_2() {
     test_setup();
 
-    assert_eq!(najmniej_dokladna_liczba(stworz_dzial("0,00335+10,689-10")), 0);
+    assert_eq!(
+        najmniej_dokladna_liczba(stworz_dzial("0,00335+10,689-10")),
+        0
+    );
 }
 
-// obliczanie_dodawanie_zaokraglanie
+// obliczanie_zaokraglanie
 #[test]
-fn odz1() {
+fn oz1() {
     test_setup();
 
     let d = stworz_dzial("0,232+5,538+43,2");
     let o = oblicz(d.clone());
-    assert_eq!(zaokrąglij(o, d).to_string(), dec!(49.0).to_string());
+    assert_eq!(o.to_string(), dec!(49.0).to_string());
 }
 
 #[test]
-fn odz2() {
+fn oz2() {
     test_setup();
 
     let d = stworz_dzial("0,00335 + 10,689 - 10");
     let o = oblicz(d.clone());
-    assert_eq!(zaokrąglij(o, d).to_string(), dec!(1).to_string());
+    assert_eq!(o.to_string(), dec!(1).to_string());
 }
 
 #[test]
-fn odz3() {
+fn oz3() {
     test_setup();
 
     let d = stworz_dzial("66,45 + 1,05 - 2,225");
     let o = oblicz(d.clone());
-    assert_eq!(zaokrąglij(o, d).to_string(), dec!(65.28).to_string());
+    assert_eq!(o.to_string(), dec!(65.28).to_string());
 }
 
 #[test]
-fn odz4() {
+fn oz4() {
     test_setup();
 
     let d = stworz_dzial("6,70002 + 11,00 + 2,295");
     let o = oblicz(d.clone());
-    assert_eq!(zaokrąglij(o, d).to_string(), dec!(20.00).to_string());
+    assert_eq!(o.to_string(), dec!(20.00).to_string());
 }
 
 #[test]
-fn odz5() {
+fn oz5() {
     test_setup();
 
     let d = stworz_dzial("2,25 + 0,0073 + 0,0655");
     let o = oblicz(d.clone());
-    assert_eq!(zaokrąglij(o, d).to_string(), dec!(2.32).to_string());
+    assert_eq!(o.to_string(), dec!(2.32).to_string());
 }
+
+#[test]
+fn oz6() {
+    test_setup();
+
+    let d = stworz_dzial("12,56 / 4,2");
+    let o = oblicz(d.clone());
+    assert_eq!(o.to_string(), dec!(3.0).to_string());
+}
+
+#[test]
+fn oz7() {
+    test_setup();
+
+    let d = stworz_dzial("5,001 / d5");
+    let o = oblicz(d.clone());
+    assert_eq!(o.to_string(), dec!(1.000).to_string());
+}
+
+#[test]
+fn oz8() {
+    test_setup();
+
+    let d = stworz_dzial("2,2 * 9,337 / 0,0836");
+    let o = oblicz(d.clone());
+    assert_eq!(o.to_string(), dec!(250).to_string());
+}
+
+#[test]
+fn oz9() {
+    test_setup();
+
+    let d1 = stworz_dzial("d15 * 0,526");
+    let o1 = oblicz(d1.clone());
+    assert_eq!(o1.to_string(), dec!(7.89).to_string());
+
+    let d2 = stworz_dzial("d0,33 * 12,429");
+    let o2: Decimal = oblicz(d2.clone());
+    assert_eq!(o2.to_string(), dec!(4.1016).to_string());
+
+    let d3 = stworz_dzial(&format!("{} / {}", o1, o2));
+    let o3: Decimal = oblicz(d3.clone());
+    assert_eq!(o3.to_string(), dec!(1.92).to_string());
+}
+
