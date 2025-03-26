@@ -217,6 +217,13 @@ pub fn potegowanie(licz: Decimal, do_potegi: Decimal) -> Decimal {
     licz_tmp
 }
 
+pub fn potegowanie_str_wrapper(str: String) -> Decimal {
+    let splitted = str.split("^").collect::<Vec<_>>();
+    let first = Decimal::from_str(splitted.first().unwrap()).unwrap();
+    let sec = Decimal::from_str(splitted.last().unwrap()).unwrap();
+    potegowanie(first, sec)
+}
+
 // Tests
 
 use std::sync::Once;
@@ -379,3 +386,11 @@ fn oz13() {
 
     assert_eq!(potegowanie(dec!(0.947), dec!(0.333333)).to_string(), dec!(0.982).to_string());
 }
+
+#[test]
+fn oz13_str() {
+    test_setup();
+
+    assert_eq!(potegowanie_str_wrapper("0.947^0.333333".to_string()).to_string(), dec!(0.982).to_string());
+}
+
