@@ -54,8 +54,8 @@ impl oper {
 
 #[derive(PartialEq, Debug, Clone)]
 pub struct liczba {
-    liczba: Decimal,
-    dokladna: bool,
+    pub liczba: Decimal,
+    pub dokladna: bool,
 }
 
 impl liczba {
@@ -66,8 +66,8 @@ impl liczba {
 
 #[derive(PartialEq, Debug, Clone)]
 pub struct dzialanie {
-    liczby: Vec<liczba>,
-    operacje: Vec<oper>,
+    pub liczby: Vec<liczba>,
+    pub operacje: Vec<oper>,
 }
 
 pub fn stworz_dzial(str: &str) -> dzialanie {
