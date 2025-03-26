@@ -6,7 +6,7 @@ use rust_decimal::{dec, Decimal, MathematicalOps};
 mod helpers;
 
 #[derive(PartialEq, Debug, Copy, Clone)]
-enum oper {
+pub enum oper {
     plus,
     minus,
     razy,
@@ -53,7 +53,7 @@ impl oper {
 }
 
 #[derive(PartialEq, Debug, Clone)]
-struct liczba {
+pub struct liczba {
     liczba: Decimal,
     dokladna: bool,
 }
@@ -65,7 +65,7 @@ impl liczba {
 }
 
 #[derive(PartialEq, Debug, Clone)]
-struct dzialanie {
+pub struct dzialanie {
     liczby: Vec<liczba>,
     operacje: Vec<oper>,
 }
